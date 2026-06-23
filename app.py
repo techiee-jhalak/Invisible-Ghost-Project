@@ -49,11 +49,12 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
     img = cv2.flip(img, 1)
     h, w, _ = img.shape
 
-    # Background Calibration
+    # Background Calibration - Using single quotes to prevent f-string bracket syntax crashes
     if globals()["track"]["calibrate_frames"] < 30:
         globals()["track"]["background"] = img.copy()
         globals()["track"]["calibrate_frames"] += 1
-        cv2.putText(img, f"CALIBRATING BACKGROUND... {int((globals()["track"]["calibrate_frames"]/30)*100)}%", (20, 40),
+        pct = int((globals()["track"]["calibrate_frames"] / 30) * 100)
+        cv2.putText(img, f"CALIBRATING BACKGROUND... {pct}%", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 140, 255), 2, cv2.LINE_AA)
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -118,7 +119,14 @@ webrtc_streamer(
             {"urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject"}
         ]
     },
-    media_stream_constraints={"video": True, "audio": False}
+    media_stream_constraints={
+        "video": {
+            "width": {"ideal": 320, "max": 480},
+            "height": {"ideal": 240, "max": 360},
+            "frameRate": {"ideal": 15, "max": 20}
+        },
+        "audio": False
+    }
 )
 
 # Reset mechanism
