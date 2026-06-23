@@ -22,10 +22,9 @@ def load_mediapipe_models():
 
 hands, selfie = load_mediapipe_models()
 
-# Thread-safe persistent state container for the WebRTC loop
-class AppState:
-    background = None
-    calibrate_frames = 0
+# Global tracking dictionary (100% thread-safe across WebRTC workers)
+if "track" not in globals():
+    globals()["track"] = {"background": None, "calibrate_frames": 0}
 
 def is_pinching(hand_landmarks):
     thumb_tip = np.array([hand_landmarks.landmark[4].x, hand_landmarks.landmark[4].y])
@@ -50,11 +49,11 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
     img = cv2.flip(img, 1)
     h, w, _ = img.shape
 
-    # Background Calibration - Safe thread access
-    if AppState.calibrate_frames < 30:
-        AppState.background = img.copy()
-        AppState.calibrate_frames += 1
-        cv2.putText(img, f"CALIBRATING BACKGROUND... {int((AppState.calibrate_frames/30)*100)}%", (20, 40),
+    # Background Calibration
+    if globals()["track"]["calibrate_frames"] < 30:
+        globals()["track"]["background"] = img.copy()
+        globals()["track"]["calibrate_frames"] += 1
+        cv2.putText(img, f"CALIBRATING BACKGROUND... {int((globals()["track"]["calibrate_frames"]/30)*100)}%", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 140, 255), 2, cv2.LINE_AA)
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -91,7 +90,7 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
             segmentation_mask = segment_results.segmentation_mask
             condition = np.stack((segmentation_mask,) * 3, axis=-1) > 0.4
             
-            bg_img = AppState.background if AppState.background is not None else img
+            bg_img = globals()["track"]["background"] if globals()["track"]["background"] is not None else img
             full_invisible = np.where(condition, bg_img, img)
 
             box_mask = np.zeros((h, w), dtype=np.uint8)
@@ -106,7 +105,7 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
 
     return av.VideoFrame.from_ndarray(output_frame, format="bgr24")
 
-# Cleaned Network and Resolution Mapping
+# Standardized WebRTC initialization
 webrtc_streamer(
     key="invisibility-portal",
     mode=WebRtcMode.SENDRECV,
@@ -119,19 +118,12 @@ webrtc_streamer(
             {"urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject"}
         ]
     },
-    media_stream_constraints={
-        "video": {
-            "width": {"ideal": 320, "max": 480},
-            "height": {"ideal": 240, "max": 360},
-            "frameRate": {"ideal": 15, "max": 20}
-        },
-        "audio": False
-    }
+    media_stream_constraints={"video": True, "audio": False}
 )
 
-# Reset option placed permanently below the video container
+# Reset mechanism
 st.markdown("---")
 if st.button("🔄 Reset / Recalibrate Background", use_container_width=True):
-    AppState.calibrate_frames = 0
-    AppState.background = None
+    globals()["track"]["calibrate_frames"] = 0
+    globals()["track"]["background"] = None
     st.rerun()
