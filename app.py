@@ -12,7 +12,6 @@ st.markdown("Pinch **BOTH** hands together (thumb & index finger) to create a dy
 # Safe cloud module mapping for MediaPipe architecture
 @st.cache_resource
 def load_mediapipe_models():
-    # Direct access safely targets the framework components without top-level alias collision
     hands = mp.solutions.hands.Hands(
         max_num_hands=2, 
         min_detection_confidence=0.5, 
@@ -22,6 +21,11 @@ def load_mediapipe_models():
     return hands, selfie
 
 hands, selfie = load_mediapipe_models()
+
+# Thread-safe persistent state container for the WebRTC loop
+class AppState:
+    background = None
+    calibrate_frames = 0
 
 def is_pinching(hand_landmarks):
     thumb_tip = np.array([hand_landmarks.landmark[4].x, hand_landmarks.landmark[4].y])
@@ -41,22 +45,16 @@ def draw_tech_corners(img, pt1, pt2, color, thickness, length=12):
     cv2.line(img, (x2, y2), (x2 - length, y2), color, thickness)
     cv2.line(img, (x2, y2), (x2, y2 - length), color, thickness)
 
-# Maintain state using Streamlit session_state memory spaces
-if "background" not in st.session_state:
-    st.session_state.background = None
-if "calibrate_frames" not in st.session_state:
-    st.session_state.calibrate_frames = 0
-
 def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
     img = frame.to_ndarray(format="bgr24")
     img = cv2.flip(img, 1)
     h, w, _ = img.shape
 
-    # Background Calibration
-    if st.session_state.calibrate_frames < 30:
-        st.session_state.background = img.copy()
-        st.session_state.calibrate_frames += 1
-        cv2.putText(img, f"CALIBRATING BACKGROUND... {int((st.session_state.calibrate_frames/30)*100)}%", (20, 40),
+    # Background Calibration - Safe thread access
+    if AppState.calibrate_frames < 30:
+        AppState.background = img.copy()
+        AppState.calibrate_frames += 1
+        cv2.putText(img, f"CALIBRATING BACKGROUND... {int((AppState.calibrate_frames/30)*100)}%", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 140, 255), 2, cv2.LINE_AA)
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -93,7 +91,7 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
             segmentation_mask = segment_results.segmentation_mask
             condition = np.stack((segmentation_mask,) * 3, axis=-1) > 0.4
             
-            bg_img = st.session_state.background if st.session_state.background is not None else img
+            bg_img = AppState.background if AppState.background is not None else img
             full_invisible = np.where(condition, bg_img, img)
 
             box_mask = np.zeros((h, w), dtype=np.uint8)
@@ -108,16 +106,23 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
 
     return av.VideoFrame.from_ndarray(output_frame, format="bgr24")
 
-# Modern, non-deprecated Streamlit WebRTC configuration hook
+# Streamlined video configuration
 webrtc_streamer(
     key="invisibility-portal",
     mode=WebRtcMode.SENDRECV,
     video_frame_callback=video_frame_callback,
-    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+    rtc_configuration={
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun2.l.google.com:19302"]}
+        ]
+    },
     media_stream_constraints={"video": True, "audio": False},
     async_processing=True,
 )
 
 if st.button("Reset / Recalibrate Background"):
-    st.session_state.calibrate_frames = 0
+    AppState.calibrate_frames = 0
+    AppState.background = None
     st.rerun()
