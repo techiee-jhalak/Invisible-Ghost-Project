@@ -106,7 +106,7 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
 
     return av.VideoFrame.from_ndarray(output_frame, format="bgr24")
 
-# FIXED Network Config & Added Frame Drops to Prevent Pausing/Lag
+# Cleaned Network and Resolution Mapping
 webrtc_streamer(
     key="invisibility-portal",
     mode=WebRtcMode.SENDRECV,
@@ -126,8 +126,7 @@ webrtc_streamer(
             "frameRate": {"ideal": 15, "max": 20}
         },
         "audio": False
-    },
-    async_processing=True, # Allows dropping old processing frames to stay real-time
+    }
 )
 
 # Reset option placed permanently below the video container
