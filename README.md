@@ -2,7 +2,7 @@
 
 An interactive, AI-powered real-time video manipulation web application built with Streamlit and MediaPipe. By detecting hand gestures via a live webcam feed, the application creates a dynamic "invisibility window" between your hands, masking out your body and revealing the calibrated background behind you.
 
-🚀 **[Live App Portal](https://invisible-ghost-project-techieejhalak.streamlit.app/)**
+🚀 **[Live App Portal](https://invisible-ghost-project-techieejhalak.streamlit.app/))**
 
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-00C7B7?style=for-the-badge&logo=google&logoColor=white)
